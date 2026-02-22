@@ -7,12 +7,17 @@ use crossterm::{
 
 pub fn print_banner() {
     let banner = r#"
-   ____  ____________________
-  / __ \/ ____/ ____/ ____/ |
- / / / / / __/ / __/ / __/  /|
-/ /_/ / /_/ / /_/ / /___ / /
-\____/\____/\____/_____//_/
-"#;
+  /$$$$$$            /$$       /$$          
+ /$$__  $$          |__/      | $$          
+| $$  \ $$ /$$   /$$ /$$  /$$$$$$$  /$$$$$$ 
+| $$  | $$|  $$ /$$/| $$ /$$__  $$ /$$__  $$
+| $$  | $$ \  $$$$/ | $$| $$  | $$| $$$$$$$$
+| $$  | $$  >$$  $$ | $$| $$  | $$| $$_____/
+|  $$$$$$/ /$$/\  $$| $$|  $$$$$$$|  $$$$$$$
+ \______/ |__/  \__/|__/ \_______/ \_______/
+                                            
+                                            
+                                            "#;
 
     let lines = banner.trim_end().lines().collect::<Vec<_>>();
     let colors = [
@@ -53,11 +58,11 @@ pub fn print_banner() {
     execute!(
         stdout,
         SetForegroundColor(Color::DarkGrey),
-        Print("  Fast AI Inference"),
+        Print("Fast AI Inference"),
         ResetColor,
         Print(" • "),
         SetForegroundColor(Color::DarkGrey),
-        Print("Rust Edition v0.1.0"),
+        Print("Oxide v0.1.0"),
         ResetColor,
         Print("\n\n")
     )
