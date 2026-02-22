@@ -6,9 +6,9 @@ license = "MIT"
 description = "AI Inference CLI in Rust - llama.cpp style"
 
 [dependencies]
-candle-core = { git = "https://github.com/huggingface/candle.git", tag = "0.9.1" }
-candle-nn = { git = "https://github.com/huggingface/candle.git", tag = "0.9.1" }
-candle-transformers = { git = "https://github.com/huggingface/candle.git", tag = "0.9.1" }
+candle-core = { git = "https://github.com/huggingface/candle.git", rev = "261f727f" }
+candle-nn = { git = "https://github.com/huggingface/candle.git", rev = "261f727f" }
+candle-transformers = { git = "https://github.com/huggingface/candle.git", rev = "261f727f" }
 tokenizers = "0.19"
 hf-hub = "0.3"
 crossterm = "0.28"

@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use candle_core::quantized::gguf_file;
 use candle_core::{Device, Tensor};
-use candle_transformers::models::quantized_llama::ModelWeights;
+use candle_transformers::models::quantized_lfm2::ModelWeights as Lfm2Model;
+use candle_transformers::models::quantized_llama::ModelWeights as LlamaModel;
 
 #[derive(Debug, Clone)]
 pub struct GgufMetadata {
@@ -17,10 +18,14 @@ pub struct GgufMetadata {
     pub file_size: u64,
 }
 
+pub enum ModelInner {
+    Llama(LlamaModel),
+    Lfm2(Lfm2Model),
+}
+
 pub struct Model {
-    weights: ModelWeights,
+    inner: ModelInner,
     metadata: GgufMetadata,
-    device: Device,
 }
 
 impl Model {
@@ -41,22 +46,27 @@ impl Model {
 
         let metadata = Self::extract_metadata(&content, filename, file_size)?;
 
-        let weights = ModelWeights::from_gguf(content, &mut file, &device)
-            .with_context(|| "Failed to load model weights from GGUF")?;
-
+        let arch = metadata.architecture.as_str();
         tracing::info!(
-            "Loaded model: {} ({} layers, {} embedding dim, {} vocab)",
+            "Loading model: {} ({} layers, {} embedding dim, {} vocab, arch: {})",
             metadata.name,
             metadata.n_layer,
             metadata.n_embd,
-            metadata.vocab_size
+            metadata.vocab_size,
+            arch
         );
 
-        Ok(Self {
-            weights,
-            metadata,
-            device,
-        })
+        let inner = if arch == "lfm2" {
+            let weights = Lfm2Model::from_gguf(content, &mut file, &device)
+                .with_context(|| "Failed to load LFM2 model weights from GGUF")?;
+            ModelInner::Lfm2(weights)
+        } else {
+            let weights = LlamaModel::from_gguf(content, &mut file, &device)
+                .with_context(|| "Failed to load LLaMA model weights from GGUF")?;
+            ModelInner::Llama(weights)
+        };
+
+        Ok(Self { inner, metadata })
     }
 
     fn extract_metadata(
@@ -117,7 +127,7 @@ impl Model {
         } else if lower.contains("smollm") {
             ("SmolLM".to_string(), "llama".to_string())
         } else if lower.contains("lfm") {
-            ("LFM".to_string(), "llama".to_string())
+            ("LFM".to_string(), "lfm2".to_string())
         } else if lower.contains("phi") {
             ("Phi".to_string(), "phi".to_string())
         } else if lower.contains("mistral") || lower.contains("mixtral") {
@@ -132,9 +142,12 @@ impl Model {
     }
 
     pub fn forward(&mut self, tokens: &[u32], pos: usize) -> Result<Tensor> {
-        let input = Tensor::new(tokens, &self.device)?.unsqueeze(0)?;
+        let input = Tensor::new(tokens, &Device::Cpu)?.unsqueeze(0)?;
 
-        let logits = self.weights.forward(&input, pos)?;
+        let logits = match &mut self.inner {
+            ModelInner::Llama(m) => m.forward(&input, pos)?,
+            ModelInner::Lfm2(m) => m.forward(&input, pos)?,
+        };
         Ok(logits)
     }
 }

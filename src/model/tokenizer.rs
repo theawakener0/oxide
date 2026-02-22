@@ -15,6 +15,16 @@ impl TokenizerWrapper {
     pub fn from_gguf(content: &gguf_file::Content) -> Result<Self> {
         let md = &content.metadata;
 
+        let model_type = match md.get("tokenizer.ggml.model") {
+            Some(v) => v
+                .to_string()
+                .map(|s| s.clone())
+                .unwrap_or_else(|_| "gpt2".to_string()),
+            None => "gpt2".to_string(),
+        };
+
+        tracing::info!("Tokenizer model type: {}", model_type);
+
         let tokens_val = match md.get("tokenizer.ggml.tokens") {
             Some(v) => v,
             None => bail!("No tokenizer tokens found in GGUF"),
@@ -26,7 +36,7 @@ impl TokenizerWrapper {
 
         let token_strings: Vec<String> = tokens
             .iter()
-            .filter_map(|t| t.to_string().ok())
+            .filter_map(|t| t.to_string().ok().map(|s| s.clone()))
             .map(|s| s.replace("<0x0A>", "\n").replace('▁', " "))
             .collect();
 
@@ -36,17 +46,22 @@ impl TokenizerWrapper {
             .map(|(i, s): (usize, &String)| (s.clone(), i as u32))
             .collect();
 
+        let eos_token_id = Self::find_eos_token(&vocab, &token_strings, md);
         let unk_token_id = Self::find_unk_token(&vocab, &token_strings);
-        let eos_token_id = Self::find_eos_token(&vocab, &token_strings);
 
-        let tokenizer_json = Self::build_tokenizer_json(&token_strings, unk_token_id)?;
+        let tokenizer_json = if model_type == "gpt2" || model_type == "bpe" {
+            let merges_val = md.get("tokenizer.ggml.merges");
+            Self::build_bpe_tokenizer_json(&token_strings, merges_val, unk_token_id)?
+        } else {
+            Self::build_unigram_tokenizer_json(&token_strings, unk_token_id)?
+        };
+
         let tokenizer = Tokenizer::from_bytes(&tokenizer_json)
             .map_err(|e| anyhow::anyhow!("Failed to create tokenizer: {}", e))?;
 
         tracing::info!(
-            "Loaded tokenizer from GGUF: {} tokens, UNK={}, EOS={}",
+            "Loaded tokenizer from GGUF: {} tokens, EOS={}",
             token_strings.len(),
-            unk_token_id,
             eos_token_id
         );
 
@@ -68,13 +83,11 @@ impl TokenizerWrapper {
             .collect();
 
         let vocab_size = tokenizer.get_vocab_size(true);
-        let unk_token_id = Self::find_unk_token(&vocab, &[]);
-        let eos_token_id = Self::find_eos_token(&vocab, &[]);
+        let eos_token_id = Self::find_eos_token_from_vocab(&vocab);
 
         tracing::info!(
-            "Loaded tokenizer from file: {} tokens, UNK={}, EOS={}",
+            "Loaded tokenizer from file: {} tokens, EOS={}",
             vocab_size,
-            unk_token_id,
             eos_token_id
         );
 
@@ -85,7 +98,67 @@ impl TokenizerWrapper {
         })
     }
 
-    fn build_tokenizer_json(tokens: &[String], unk_id: u32) -> Result<Vec<u8>> {
+    fn build_bpe_tokenizer_json(
+        tokens: &[String],
+        merges_val: Option<&gguf_file::Value>,
+        unk_id: u32,
+    ) -> Result<Vec<u8>> {
+        let vocab: std::collections::BTreeMap<String, u32> = tokens
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.clone(), i as u32))
+            .collect();
+
+        let merges: Vec<String> = if let Some(m) = merges_val {
+            match m.to_vec() {
+                Ok(v) => v
+                    .iter()
+                    .filter_map(|x| x.to_string().ok().map(|s| s.clone()))
+                    .collect(),
+                Err(_) => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        };
+
+        let merges_str: Vec<&str> = merges.iter().map(|s| s.as_str()).collect();
+
+        let tokenizer_json = serde_json::json!({
+            "version": "1.0",
+            "model": {
+                "type": "BPE",
+                "vocab": vocab,
+                "merges": merges_str
+            },
+            "decoder": {
+                "type": "ByteLevel",
+                "add_prefix_space": false,
+                "trim_offsets": true,
+                "use_regex": true
+            },
+            "pre_tokenizer": {
+                "type": "ByteLevel",
+                "add_prefix_space": false,
+                "trim_offsets": true,
+                "use_regex": true
+            },
+            "added_tokens": [
+                {
+                    "id": unk_id,
+                    "content": "<unk>",
+                    "single_word": false,
+                    "lstrip": false,
+                    "rstrip": false,
+                    "normalized": false,
+                    "special": true
+                }
+            ]
+        });
+
+        serde_json::to_vec(&tokenizer_json).with_context(|| "Failed to serialize tokenizer JSON")
+    }
+
+    fn build_unigram_tokenizer_json(tokens: &[String], unk_id: u32) -> Result<Vec<u8>> {
         let vocab_entries: Vec<serde_json::Value> = tokens
             .iter()
             .enumerate()
@@ -138,16 +211,25 @@ impl TokenizerWrapper {
         0
     }
 
-    fn find_eos_token(vocab: &HashMap<String, u32>, tokens: &[String]) -> u32 {
+    fn find_eos_token(
+        vocab: &HashMap<String, u32>,
+        tokens: &[String],
+        md: &HashMap<String, gguf_file::Value>,
+    ) -> u32 {
+        if let Some(v) = md.get("tokenizer.ggml.eos_token_id") {
+            if let Ok(id) = v.to_u32() {
+                return id;
+            }
+        }
+
         for eos_str in &[
+            "",
+            "<|im_end|>",
             "</s>",
-            "\n",
             "<eos>",
             "<|end_of_text|>",
-            "<|im_end|>",
             "<end_of_turn>",
             "<｜end▁of▁sentence｜>",
-            "\n",
         ] {
             if let Some(id) = vocab.get(*eos_str) {
                 return *id;
@@ -155,11 +237,27 @@ impl TokenizerWrapper {
         }
 
         for (i, t) in tokens.iter().enumerate() {
-            if t.contains("endoftext") || t.contains("eos") || t == "\n" {
+            if t.contains("endoftext") || t.contains("eos") {
                 return i as u32;
             }
         }
 
+        1
+    }
+
+    fn find_eos_token_from_vocab(vocab: &HashMap<String, u32>) -> u32 {
+        for eos_str in &[
+            "",
+            "<|im_end|>",
+            "</s>",
+            "<eos>",
+            "<|end_of_text|>",
+            "<end_of_turn>",
+        ] {
+            if let Some(id) = vocab.get(*eos_str) {
+                return *id;
+            }
+        }
         1
     }
 
