@@ -84,6 +84,11 @@ impl Model {
             None => "llama".to_string(),
         };
 
+        let model_name: String = md
+            .get("general.name")
+            .and_then(|v| v.to_string().ok().map(|s| s.clone()))
+            .unwrap_or_else(|| filename.to_string());
+
         let find_key = |key_suffix: &str| -> Option<usize> {
             if let Some(v) = md.get(&format!("{}.{}", arch, key_suffix)) {
                 return v.to_u32().ok().map(|v| v as usize);
@@ -107,10 +112,8 @@ impl Model {
         let get_optional =
             |key_suffix: &str, default: usize| -> usize { find_key(key_suffix).unwrap_or(default) };
 
-        let (name, _) = Self::detect_architecture(filename);
-
         Ok(GgufMetadata {
-            name,
+            name: model_name,
             architecture: arch.clone(),
             n_layer: get_required("block_count")?,
             n_embd: get_required("embedding_length")?,
@@ -118,23 +121,6 @@ impl Model {
             context_length: get_optional("context_length", 4096),
             file_size,
         })
-    }
-
-    fn detect_architecture(filename: &str) -> (String, String) {
-        let lower = filename.to_lowercase();
-        if lower.contains("gemma") {
-            ("Gemma".to_string(), "gemma".to_string())
-        } else if lower.contains("smollm") {
-            ("SmolLM".to_string(), "llama".to_string())
-        } else if lower.contains("lfm") {
-            ("LFM".to_string(), "lfm2".to_string())
-        } else if lower.contains("phi") {
-            ("Phi".to_string(), "phi".to_string())
-        } else if lower.contains("mistral") || lower.contains("mixtral") {
-            ("Mistral".to_string(), "mistral".to_string())
-        } else {
-            ("LLaMA".to_string(), "llama".to_string())
-        }
     }
 
     pub fn metadata(&self) -> &GgufMetadata {

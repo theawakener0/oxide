@@ -33,9 +33,9 @@ impl ChatTemplate {
             }
         } else if lower.contains("lfm") {
             Self {
-                user_prefix: "<|user|>\n".to_string(),
-                user_suffix: "<|end|>\n".to_string(),
-                assistant_prefix: "<|assistant|\n".to_string(),
+                user_prefix: "<|im_start|>user\n".to_string(),
+                user_suffix: "<|im_end|>\n".to_string(),
+                assistant_prefix: "<|im_start|>assistant\n".to_string(),
                 system_prefix: None,
             }
         } else if lower.contains("gemma") {
@@ -52,11 +52,18 @@ impl ChatTemplate {
                 assistant_prefix: "".to_string(),
                 system_prefix: None,
             }
+        } else if lower.contains("phi") {
+            Self {
+                user_prefix: "user\n".to_string(),
+                user_suffix: "<|end|>\n".to_string(),
+                assistant_prefix: "assistant\n".to_string(),
+                system_prefix: None,
+            }
         } else {
             Self {
-                user_prefix: "<|user|>\n".to_string(),
+                user_prefix: "user\n".to_string(),
                 user_suffix: "\n".to_string(),
-                assistant_prefix: "<|assistant|\n".to_string(),
+                assistant_prefix: "assistant\n".to_string(),
                 system_prefix: None,
             }
         }
@@ -109,10 +116,8 @@ impl Generator {
         let tokenizer = if let Some(path) = tokenizer_path {
             TokenizerWrapper::from_file(path)?
         } else {
-            tracing::info!("Extracting tokenizer from GGUF...");
-            let mut file = std::fs::File::open(model_path)?;
-            let content = candle_core::quantized::gguf_file::Content::read(&mut file)?;
-            TokenizerWrapper::from_gguf(&content)?
+            tracing::info!("Loading tokenizer from GGUF...");
+            TokenizerWrapper::from_gguf(model_path)?
         };
 
         let sampling = if temperature <= 0.0 {

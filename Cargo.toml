@@ -10,7 +10,7 @@ candle-core = { git = "https://github.com/huggingface/candle.git", rev = "261f72
 candle-nn = { git = "https://github.com/huggingface/candle.git", rev = "261f727f" }
 candle-transformers = { git = "https://github.com/huggingface/candle.git", rev = "261f727f" }
 tokenizers = "0.19"
-hf-hub = "0.3"
+shimmytok = "0.7"
 crossterm = "0.28"
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
