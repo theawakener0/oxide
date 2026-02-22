@@ -8,9 +8,6 @@ use tokenizers::Tokenizer;
 pub struct TokenizerWrapper {
     inner: Tokenizer,
     eos_token_id: u32,
-    bos_token_id: u32,
-    unk_token_id: u32,
-    vocab: HashMap<String, u32>,
     pending_tokens: Vec<u32>,
 }
 
@@ -41,26 +38,21 @@ impl TokenizerWrapper {
 
         let unk_token_id = Self::find_unk_token(&vocab, &token_strings);
         let eos_token_id = Self::find_eos_token(&vocab, &token_strings);
-        let bos_token_id = Self::find_bos_token(&vocab, &token_strings);
 
         let tokenizer_json = Self::build_tokenizer_json(&token_strings, unk_token_id)?;
         let tokenizer = Tokenizer::from_bytes(&tokenizer_json)
             .map_err(|e| anyhow::anyhow!("Failed to create tokenizer: {}", e))?;
 
         tracing::info!(
-            "Loaded tokenizer from GGUF: {} tokens, UNK={}, EOS={}, BOS={}",
+            "Loaded tokenizer from GGUF: {} tokens, UNK={}, EOS={}",
             token_strings.len(),
             unk_token_id,
-            eos_token_id,
-            bos_token_id
+            eos_token_id
         );
 
         Ok(Self {
             inner: tokenizer,
             eos_token_id,
-            bos_token_id,
-            unk_token_id,
-            vocab,
             pending_tokens: Vec::new(),
         })
     }
@@ -78,31 +70,19 @@ impl TokenizerWrapper {
         let vocab_size = tokenizer.get_vocab_size(true);
         let unk_token_id = Self::find_unk_token(&vocab, &[]);
         let eos_token_id = Self::find_eos_token(&vocab, &[]);
-        let bos_token_id = Self::find_bos_token(&vocab, &[]);
 
         tracing::info!(
-            "Loaded tokenizer from file: {} tokens, UNK={}, EOS={}, BOS={}",
+            "Loaded tokenizer from file: {} tokens, UNK={}, EOS={}",
             vocab_size,
             unk_token_id,
-            eos_token_id,
-            bos_token_id
+            eos_token_id
         );
 
         Ok(Self {
             inner: tokenizer,
             eos_token_id,
-            bos_token_id,
-            unk_token_id,
-            vocab,
             pending_tokens: Vec::new(),
         })
-    }
-
-    pub fn from_hf(repo: &str) -> Result<Self> {
-        let api = hf_hub::api::sync::Api::new()?;
-        let repo = api.model(repo.to_string());
-        let tokenizer_path = repo.get("tokenizer.json")?;
-        Self::from_file(&tokenizer_path)
     }
 
     fn build_tokenizer_json(tokens: &[String], unk_id: u32) -> Result<Vec<u8>> {
@@ -127,7 +107,15 @@ impl TokenizerWrapper {
                 ]
             },
             "added_tokens": [
-                {"id": unk_id, "content": "<unk>", "special": true}
+                {
+                    "id": unk_id,
+                    "content": "<unk>",
+                    "single_word": false,
+                    "lstrip": false,
+                    "rstrip": false,
+                    "normalized": false,
+                    "special": true
+                }
             ]
         });
 
@@ -175,21 +163,6 @@ impl TokenizerWrapper {
         1
     }
 
-    fn find_bos_token(vocab: &HashMap<String, u32>, _tokens: &[String]) -> u32 {
-        for bos_str in &[
-            "<s>",
-            "<|begin_of_text|>",
-            "<bos>",
-            "<|im_start|>",
-            "<start_of_turn>",
-        ] {
-            if let Some(id) = vocab.get(*bos_str) {
-                return *id;
-            }
-        }
-        0
-    }
-
     pub fn encode(&self, text: &str) -> Result<Vec<u32>> {
         let encoding = self
             .inner
@@ -208,22 +181,6 @@ impl TokenizerWrapper {
 
     pub fn eos_token_id(&self) -> u32 {
         self.eos_token_id
-    }
-
-    pub fn bos_token_id(&self) -> u32 {
-        self.bos_token_id
-    }
-
-    pub fn unk_token_id(&self) -> u32 {
-        self.unk_token_id
-    }
-
-    pub fn vocab_size(&self) -> usize {
-        self.inner.get_vocab_size(true)
-    }
-
-    pub fn get_token_id(&self, token: &str) -> Option<u32> {
-        self.vocab.get(token).copied()
     }
 
     pub fn clear_cache(&mut self) {

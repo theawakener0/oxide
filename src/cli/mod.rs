@@ -4,6 +4,6 @@ pub mod output;
 pub mod spinner;
 
 pub use banner::print_banner;
-pub use history::{History, Message};
+pub use history::History;
 pub use output::{Output, StreamOutput};
 pub use spinner::Spinner;

@@ -10,7 +10,6 @@ use std::time::Instant;
 
 use anyhow::Result;
 use clap::Parser;
-use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -141,12 +140,9 @@ fn main() -> Result<()> {
                     stream.print_token(&t);
                     token_count += 1;
                 }
-                StreamEvent::Done { .. } => {
+                StreamEvent::Done => {
                     stream.finish();
                     output.print_stats(token_count, start.elapsed());
-                }
-                StreamEvent::Error(e) => {
-                    output.print_error(&e);
                 }
             },
         )?;
@@ -227,13 +223,9 @@ fn interactive_mode(generator: Generator, args: Args, mut output: Output) -> Res
                         stream.print_token(&t);
                         token_count += 1;
                     }
-                    StreamEvent::Done { .. } => {
+                    StreamEvent::Done => {
                         stream.finish();
                         output.print_stats(token_count, start.elapsed());
-                    }
-                    StreamEvent::Error(e) => {
-                        stream.finish();
-                        output.print_error(&e);
                     }
                 }
             },

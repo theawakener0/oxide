@@ -89,27 +89,6 @@ impl History {
         self.messages.clear();
         self.save();
     }
-
-    pub fn messages(&self) -> &[Message] {
-        &self.messages
-    }
-
-    pub fn last_n_messages(&self, n: usize) -> &[Message] {
-        if self.messages.len() <= n {
-            &self.messages
-        } else {
-            &self.messages[self.messages.len() - n..]
-        }
-    }
-
-    pub fn format_for_context(&self, max_messages: usize) -> String {
-        let messages = self.last_n_messages(max_messages);
-        messages
-            .iter()
-            .map(|m| format!("{}: {}", m.role, m.content))
-            .collect::<Vec<_>>()
-            .join("\n\n")
-    }
 }
 
 impl Default for History {

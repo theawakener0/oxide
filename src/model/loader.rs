@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::path::PathBuf;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use candle_core::quantized::gguf_file;
 use candle_core::{Device, Tensor};
 use candle_transformers::models::quantized_llama::ModelWeights;
@@ -12,8 +12,6 @@ pub struct GgufMetadata {
     pub architecture: String,
     pub n_layer: usize,
     pub n_embd: usize,
-    pub n_head: usize,
-    pub n_head_kv: usize,
     pub vocab_size: usize,
     pub context_length: usize,
     pub file_size: u64,
@@ -76,58 +74,38 @@ impl Model {
             None => "llama".to_string(),
         };
 
-        let get_with_prefix = |key: &str| -> Result<usize> {
-            let full_key = format!("{}.{}", arch, key);
-            if let Some(v) = md.get(&full_key) {
-                return v
-                    .to_u32()
-                    .map(|v| v as usize)
-                    .with_context(|| format!("Failed to parse {} as u32", full_key));
+        let find_key = |key_suffix: &str| -> Option<usize> {
+            if let Some(v) = md.get(&format!("{}.{}", arch, key_suffix)) {
+                return v.to_u32().ok().map(|v| v as usize);
             }
 
-            for prefix in &["llama", "qwen", "mistral", "phi", "gemma"] {
-                let alt_key = format!("{}.{}", prefix, key);
-                if let Some(v) = md.get(&alt_key) {
-                    return v
-                        .to_u32()
-                        .map(|v| v as usize)
-                        .with_context(|| format!("Failed to parse {} as u32", alt_key));
+            for (k, v) in md.iter() {
+                if k.ends_with(&format!(".{}", key_suffix)) {
+                    if let Ok(val) = v.to_u32() {
+                        return Some(val as usize);
+                    }
                 }
             }
-
-            bail!("Missing metadata key: {} (tried {}.{})", key, arch, key)
+            None
         };
 
-        let get_with_prefix_or = |key: &str, default: usize| -> usize {
-            let full_key = format!("{}.{}", arch, key);
-            if let Some(v) = md.get(&full_key).and_then(|v| v.to_u32().ok()) {
-                return v as usize;
-            }
-
-            for prefix in &["llama", "qwen", "mistral", "phi", "gemma"] {
-                let alt_key = format!("{}.{}", prefix, key);
-                if let Some(v) = md.get(&alt_key).and_then(|v| v.to_u32().ok()) {
-                    return v as usize;
-                }
-            }
-
-            default
+        let get_required = |key_suffix: &str| -> Result<usize> {
+            find_key(key_suffix)
+                .ok_or_else(|| anyhow::anyhow!("Missing metadata key: {}", key_suffix))
         };
+
+        let get_optional =
+            |key_suffix: &str, default: usize| -> usize { find_key(key_suffix).unwrap_or(default) };
 
         let (name, _) = Self::detect_architecture(filename);
-
-        let n_head = get_with_prefix("attention.head_count")?;
-        let n_head_kv = get_with_prefix_or("attention.head_count_kv", n_head);
 
         Ok(GgufMetadata {
             name,
             architecture: arch.clone(),
-            n_layer: get_with_prefix("block_count")?,
-            n_embd: get_with_prefix("embedding_length")?,
-            n_head,
-            n_head_kv,
-            vocab_size: get_with_prefix("vocab_size")?,
-            context_length: get_with_prefix_or("context_length", 4096),
+            n_layer: get_required("block_count")?,
+            n_embd: get_required("embedding_length")?,
+            vocab_size: get_required("vocab_size")?,
+            context_length: get_optional("context_length", 4096),
             file_size,
         })
     }

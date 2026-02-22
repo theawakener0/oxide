@@ -60,16 +60,6 @@ impl Output {
         self.print_separator();
     }
 
-    pub fn print_assistant_prefix(&mut self) {
-        execute!(
-            self.stdout,
-            SetForegroundColor(Color::Cyan),
-            Print("Assistant: "),
-            ResetColor,
-        )
-        .ok();
-    }
-
     pub fn print_stats(&mut self, tokens: usize, duration: Duration) {
         let tps = if duration.as_secs_f64() > 0.0 {
             tokens as f64 / duration.as_secs_f64()
@@ -164,10 +154,6 @@ impl StreamOutput {
 
     pub fn finish(&mut self) {
         execute!(self.stdout, Print("\n")).ok();
-    }
-
-    pub fn reset(&mut self) {
-        self.first_token = true;
     }
 }
 

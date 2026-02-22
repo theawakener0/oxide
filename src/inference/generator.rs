@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
-use candle_core::Tensor;
+use anyhow::Result;
 use candle_transformers::generation::{LogitsProcessor, Sampling};
 use candle_transformers::utils::apply_repeat_penalty;
 
@@ -9,68 +8,55 @@ use crate::model::{GgufMetadata, Model, TokenizerWrapper};
 
 pub enum StreamEvent {
     Token(String),
-    Done { tokens_generated: usize },
-    Error(String),
+    Done,
 }
 
 pub struct ChatTemplate {
-    pub name: String,
     pub user_prefix: String,
     pub user_suffix: String,
     pub assistant_prefix: String,
-    pub assistant_suffix: String,
     pub system_prefix: Option<String>,
 }
 
 impl ChatTemplate {
-    pub fn from_architecture(arch: &str, model_name: &str) -> Self {
+    pub fn from_architecture(_arch: &str, model_name: &str) -> Self {
         let lower = model_name.to_lowercase();
 
         if lower.contains("smollm") {
             Self {
-                name: "smollm".to_string(),
                 user_prefix: "<|im_start|>user\n".to_string(),
                 user_suffix: "<|im_end|>\n".to_string(),
                 assistant_prefix: "<|im_start|>assistant\n".to_string(),
-                assistant_suffix: "<|im_end|>\n".to_string(),
                 system_prefix: Some(
                     "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n".to_string(),
                 ),
             }
         } else if lower.contains("lfm") {
             Self {
-                name: "lfm".to_string(),
                 user_prefix: "<|user|>\n".to_string(),
                 user_suffix: "<|end|>\n".to_string(),
                 assistant_prefix: "<|assistant|\n".to_string(),
-                assistant_suffix: "<|end|>\n".to_string(),
                 system_prefix: None,
             }
         } else if lower.contains("gemma") {
             Self {
-                name: "gemma".to_string(),
                 user_prefix: "<start_of_turn>user\n".to_string(),
                 user_suffix: "<end_of_turn>\n".to_string(),
                 assistant_prefix: "<start_of_turn>model\n".to_string(),
-                assistant_suffix: "<end_of_turn>\n".to_string(),
                 system_prefix: None,
             }
         } else if lower.contains("mistral") || lower.contains("zephyr") {
             Self {
-                name: "mistral".to_string(),
                 user_prefix: "[INST] ".to_string(),
                 user_suffix: " [/INST]".to_string(),
                 assistant_prefix: "".to_string(),
-                assistant_suffix: "</s>".to_string(),
                 system_prefix: None,
             }
         } else {
             Self {
-                name: "llama".to_string(),
                 user_prefix: "<|user|>\n".to_string(),
                 user_suffix: "\n".to_string(),
                 assistant_prefix: "<|assistant|\n".to_string(),
-                assistant_suffix: "\n".to_string(),
                 system_prefix: None,
             }
         }
@@ -100,7 +86,6 @@ pub struct Generator {
     tokenizer: TokenizerWrapper,
     logits_processor: LogitsProcessor,
     history: Vec<u32>,
-    max_history: usize,
     template: ChatTemplate,
     metadata: GgufMetadata,
 }
@@ -113,7 +98,7 @@ impl Generator {
         top_p: Option<f64>,
         top_k: Option<usize>,
         seed: u64,
-        max_history: usize,
+        _max_history: usize,
     ) -> Result<Self> {
         tracing::info!("Loading model from: {:?}", model_path);
 
@@ -148,7 +133,6 @@ impl Generator {
             tokenizer,
             logits_processor,
             history: Vec::new(),
-            max_history,
             template,
             metadata,
         })
@@ -156,18 +140,6 @@ impl Generator {
 
     pub fn metadata(&self) -> &GgufMetadata {
         &self.metadata
-    }
-
-    pub fn template(&self) -> &ChatTemplate {
-        &self.template
-    }
-
-    pub fn clear_history(&mut self) {
-        self.history.clear();
-    }
-
-    pub fn history_len(&self) -> usize {
-        self.history.len()
     }
 
     pub fn generate<F>(
@@ -202,8 +174,6 @@ impl Generator {
 
         let prompt_start = std::time::Instant::now();
 
-        let input =
-            Tensor::new(prompt_tokens.as_slice(), &candle_core::Device::Cpu)?.unsqueeze(0)?;
         let logits = self.model.forward(&prompt_tokens, 0)?;
         let logits = logits.squeeze(0)?;
 
@@ -228,8 +198,6 @@ impl Generator {
             if next_token == eos_token {
                 break;
             }
-
-            let input = Tensor::new(&[next_token], &candle_core::Device::Cpu)?.unsqueeze(0)?;
 
             let logits = self.model.forward(&[next_token], all_tokens.len() - 1)?;
             let logits = logits.squeeze(0)?;
@@ -273,9 +241,7 @@ impl Generator {
             tokens_per_sec
         );
 
-        callback(StreamEvent::Done {
-            tokens_generated: generated,
-        });
+        callback(StreamEvent::Done);
 
         let response = self.tokenizer.decode(&response_tokens)?;
         Ok(response)

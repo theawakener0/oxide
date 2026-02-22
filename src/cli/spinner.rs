@@ -14,14 +14,12 @@ use crossterm::{
 pub struct Spinner {
     running: Arc<AtomicBool>,
     handle: Option<JoinHandle<()>>,
-    message: String,
 }
 
 impl Spinner {
     pub fn new(message: &str) -> Self {
         let running = Arc::new(AtomicBool::new(true));
-        let msg = message.to_string();
-        let spinner_msg = msg.clone();
+        let spinner_msg = message.to_string();
 
         let handle = thread::spawn({
             let running = running.clone();
@@ -49,7 +47,6 @@ impl Spinner {
         Self {
             running,
             handle: Some(handle),
-            message: msg,
         }
     }
 
