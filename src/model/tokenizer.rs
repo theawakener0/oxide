@@ -74,12 +74,7 @@ impl TokenizerWrapper {
             }
         };
 
-        if decoded.len() > prev_decoded.len() {
-            let new_text = decoded[prev_decoded.len()..].to_string();
-            Ok(Some(new_text))
-        } else {
-            Ok(None)
-        }
+        Ok(get_new_text(&decoded, &prev_decoded))
     }
 
     pub fn decode_rest(&mut self) -> Result<Option<String>> {
@@ -98,10 +93,18 @@ impl TokenizerWrapper {
             }
         };
 
-        if decoded.len() > prev_decoded.len() {
-            Ok(Some(decoded[prev_decoded.len()..].to_string()))
-        } else {
-            Ok(None)
-        }
+        Ok(get_new_text(&decoded, &prev_decoded))
+    }
+}
+
+fn get_new_text(full: &str, prev: &str) -> Option<String> {
+    let prev_chars: Vec<char> = prev.chars().collect();
+    let full_chars: Vec<char> = full.chars().collect();
+
+    if full_chars.len() > prev_chars.len() {
+        let new_chars: String = full_chars[prev_chars.len()..].iter().collect();
+        Some(new_chars)
+    } else {
+        None
     }
 }
