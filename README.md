@@ -15,7 +15,7 @@
 - **Chat Templates** — Automatic prompt formatting for popular model families
 - **Interactive REPL** — Full conversation mode with history persistence
 - **One-Shot Mode** — Non-interactive generation for scripting/pipelines
-- **Beautiful TUI** — Animated loading, syntax-highlighted output, terminal theming
+- **Beautiful CLI** — Animated loading, syntax-highlighted output, terminal theming
 
 ## Installation
 
@@ -92,12 +92,7 @@ make install
 
 ### Model Architectures
 
-Oxide uses [Candle](https://github.com/huggingface/candle) for inference. The following quantized architectures are supported:
-
-| Architecture | Status | Model Examples |
-|--------------|--------|----------------|
-| LLaMA | ✅ Supported | LLaMA 2/3, Mistral, Zephyr, Yi, Phi, Qwen, Gemma, SmolLM |
-| LFM2 | ✅ Supported | LFM2-1.2B, Liquid Foundation Models |
+Oxide uses [Candle](https://github.com/huggingface/candle) for inference. 
 
 > **Note**: Any GGUF model with LLaMA-compatible architecture should work. This includes most popular open-source models.
 
@@ -207,32 +202,6 @@ sequenceDiagram
     Stream->>User: Show stats (tok/s)
 ```
 
-## Project Structure
-
-```
-oxide/
-├── src/
-│   ├── main.rs           # Entry point, CLI parsing, interactive loop
-│   ├── cli/
-│   │   ├── mod.rs        # CLI module exports
-│   │   ├── banner.rs     # ASCII art banner with animation
-│   │   ├── history.rs    # Conversation history persistence
-│   │   ├── loader.rs     # Animated model loading indicator
-│   │   ├── stream.rs     # Streaming output with metrics
-│   │   └── theme.rs      # Terminal color theme constants
-│   ├── inference/
-│   │   ├── mod.rs        # Inference module exports
-│   │   └── generator.rs  # Token generation, sampling, chat templates
-│   └── model/
-│       ├── mod.rs        # Model module exports
-│       ├── loader.rs     # GGUF loading, metadata extraction
-│       └── tokenizer.rs  # Tokenizer wrapper with streaming decode
-├── Cargo.toml
-├── Makefile
-├── LICENSE
-└── README.md
-```
-
 ## Development
 
 ```bash
@@ -275,12 +244,9 @@ make clean
 
 ## Roadmap
 
-- [ ] GPU acceleration (CUDA/Metal)
 - [ ] Multi-modal support
 - [ ] OpenAI-compatible API server
-- [ ] RAG integration
 - [ ] Model download/management
-- [ ] GGUF chat template extraction (vs. hardcoded detection)
 
 ## License
 
