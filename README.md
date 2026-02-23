@@ -7,11 +7,12 @@
 
 ## Features
 
-- **GGUF Model Support** — Load quantized models in GGUF format (LLaMA, LFM2 architectures)
+- **GGUF Model Support** — Load quantized models in GGUF format
+- **Full Tokenizer Compatibility** — Supports all llama.cpp tokenizer types via [shimmytok](https://crates.io/crates/shimmytok) (SPM, BPE, WPM, UGM, RWKV)
 - **Streaming Output** — Real-time token generation with tokens-per-second metrics
 - **Multiple Sampling Strategies** — Temperature, top-k, top-p, and argmax sampling
 - **Repeat Penalty** — Prevents repetitive output with configurable penalty window
-- **Chat Templates** — Automatic prompt formatting for SmolLM, LFM, Gemma, Mistral, Zephyr, Phi
+- **Chat Templates** — Automatic prompt formatting for popular model families
 - **Interactive REPL** — Full conversation mode with history persistence
 - **One-Shot Mode** — Non-interactive generation for scripting/pipelines
 - **Beautiful TUI** — Animated loading, syntax-highlighted output, terminal theming
@@ -89,52 +90,147 @@ make install
 
 ## Supported Models
 
-### Architectures
+### Model Architectures
 
-| Architecture | Status |
-|--------------|--------|
-| LLaMA | ✅ Supported |
-| LFM2 | ✅ Supported |
+Oxide uses [Candle](https://github.com/huggingface/candle) for inference. The following quantized architectures are supported:
 
-### Chat Template Compatibility
+| Architecture | Status | Model Examples |
+|--------------|--------|----------------|
+| LLaMA | ✅ Supported | LLaMA 2/3, Mistral, Zephyr, Yi, Phi, Qwen, Gemma, SmolLM |
+| LFM2 | ✅ Supported | LFM2-1.2B, Liquid Foundation Models |
 
-Oxide automatically detects and applies the correct chat template based on model name:
+> **Note**: Any GGUF model with LLaMA-compatible architecture should work. This includes most popular open-source models.
 
-| Model Family | Template Format |
-|--------------|-----------------|
-| SmolLM | `<\|im_start\|>user\n...<\|im_end\|>` |
-| LFM | `<\|im_start\|>user\n...<\|im_end\|>` |
-| Gemma | `<start_of_turn>user\n...<end_of_turn>` |
-| Mistral / Zephyr | `[INST] ... [/INST]` |
-| Phi | `user\n...<\|end\|>` |
+### Tokenizer Support
+
+Oxide uses [shimmytok](https://crates.io/crates/shimmytok) for tokenizer support, providing 100% llama.cpp compatibility:
+
+| Tokenizer Type | Description |
+|----------------|-------------|
+| **SPM** | SentencePiece (LLaMA, Mistral, etc.) |
+| **BPE** | Byte-Pair Encoding (GPT-2 style) |
+| **WPM** | WordPiece Model (BERT style) |
+| **UGM** | Unigram Model |
+| **RWKV** | RWKV tokenizers |
+
+### Chat Templates
+
+Oxide automatically applies the correct chat template based on model name detection:
+
+| Model Family | Template Format | Notes |
+|--------------|-----------------|-------|
+| SmolLM | `<\|im_start\|>user\n...<\|im_end\|>` | Includes system prompt |
+| LFM | `<\|im_start\|>user\n...<\|im_end\|>` | ChatML-style |
+| Gemma | `<start_of_turn>user\n...<end_of_turn>` | Google's format |
+| Mistral / Zephyr | `[INST] ... [/INST]` | LLaMA-2 instruct style |
+| Phi | `user\n...<\|end\|>\nassistant\n` | Microsoft Phi format |
+| Default | `user\n...\nassistant\n` | Fallback for unknown models |
+
+> **Fallback**: Models not matching known patterns use a simple `user/assistant` format.
 
 ## Architecture
 
+```mermaid
+graph TB
+    subgraph CLI["CLI Layer (clap)"]
+        args[Argument Parser]
+    end
+
+    subgraph TUI["Terminal UI (crossterm)"]
+        banner[Animated Banner]
+        loader[Ferris Loader]
+        stream[Streaming Output]
+        theme[Color Theme]
+    end
+
+    subgraph Inference["Inference Layer"]
+        generator[Generator]
+        template[Chat Template]
+        sampler[Logits Processor]
+        callback[StreamEvent Callback]
+    end
+
+    subgraph Model["Model Layer"]
+        model[Model Weights]
+        tokenizer[Tokenizer Wrapper]
+    end
+
+    subgraph Core["Core Dependencies"]
+        candle[Candle Transformers]
+        shimmytok[shimmytok]
+    end
+
+    args --> generator
+    generator --> template
+    generator --> sampler
+    generator --> model
+    generator --> tokenizer
+    generator --> callback
+    
+    callback --> stream
+    
+    model --> candle
+    tokenizer --> shimmytok
+    
+    banner --> theme
+    loader --> theme
+    stream --> theme
 ```
-┌─────────────────────────────────────────────────────────┐
-│                        CLI (clap)                        │
-├─────────────────────────────────────────────────────────┤
-│  ┌─────────┐  ┌──────────┐  ┌─────────┐  ┌───────────┐  │
-│  │ Banner  │  │ Loader   │  │ Stream  │  │  History  │  │
-│  │ (TUI)   │  │ (TUI)    │  │ (TUI)   │  │ (JSON)    │  │
-│  └─────────┘  └──────────┘  └─────────┘  └───────────┘  │
-├─────────────────────────────────────────────────────────┤
-│                    Inference Layer                       │
-│  ┌────────────────────────────────────────────────────┐ │
-│  │  Generator                                          │ │
-│  │  - ChatTemplate (prompt formatting)                 │ │
-│  │  - LogitsProcessor (sampling strategies)            │ │
-│  │  - StreamEvent (callback-based streaming)           │ │
-│  └────────────────────────────────────────────────────┘ │
-├─────────────────────────────────────────────────────────┤
-│                     Model Layer                          │
-│  ┌───────────────┐  ┌────────────────────────────────┐  │
-│  │  Model        │  │  TokenizerWrapper              │  │
-│  │  (LLaMA/LFM2) │  │  (shimmytok/GGUF extraction)   │  │
-│  └───────────────┘  └────────────────────────────────┘  │
-├─────────────────────────────────────────────────────────┤
-│              Candle (HuggingFace) + Crossterm            │
-└─────────────────────────────────────────────────────────┘
+
+### Data Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI
+    participant Generator
+    participant Model
+    participant Tokenizer
+    participant Stream
+
+    User->>CLI: Enter prompt
+    CLI->>Generator: generate(prompt, config)
+    Generator->>Tokenizer: encode(prompt + template)
+    Tokenizer-->>Generator: tokens[]
+    Generator->>Model: forward(tokens)
+    Model-->>Generator: logits
+    
+    loop For each token
+        Generator->>Generator: sample(logits)
+        Generator->>Tokenizer: decode_next(token)
+        Tokenizer-->>Generator: text
+        Generator->>Stream: StreamEvent::Token(text)
+        Stream->>User: Display token
+    end
+    
+    Generator->>Stream: StreamEvent::Done
+    Stream->>User: Show stats (tok/s)
+```
+
+## Project Structure
+
+```
+oxide/
+├── src/
+│   ├── main.rs           # Entry point, CLI parsing, interactive loop
+│   ├── cli/
+│   │   ├── mod.rs        # CLI module exports
+│   │   ├── banner.rs     # ASCII art banner with animation
+│   │   ├── history.rs    # Conversation history persistence
+│   │   ├── loader.rs     # Animated model loading indicator
+│   │   ├── stream.rs     # Streaming output with metrics
+│   │   └── theme.rs      # Terminal color theme constants
+│   ├── inference/
+│   │   ├── mod.rs        # Inference module exports
+│   │   └── generator.rs  # Token generation, sampling, chat templates
+│   └── model/
+│       ├── mod.rs        # Model module exports
+│       ├── loader.rs     # GGUF loading, metadata extraction
+│       └── tokenizer.rs  # Tokenizer wrapper with streaming decode
+├── Cargo.toml
+├── Makefile
+├── LICENSE
+└── README.md
 ```
 
 ## Development
@@ -162,27 +258,29 @@ make clean
 |-------|---------|
 | `candle-core` | Tensor operations, ML primitives |
 | `candle-nn` | Neural network layers |
-| `candle-transformers` | Pre-built model architectures |
-| `tokenizers` | HuggingFace tokenizers |
-| `shimmytok` | GGUF tokenizer extraction |
-| `clap` | CLI argument parsing |
-| `crossterm` | Terminal control (colors, cursor) |
-| `anyhow` | Error handling |
+| `candle-transformers` | Pre-built model architectures (LLaMA, LFM2) |
+| `shimmytok` | GGUF tokenizer (100% llama.cpp compatible) |
+| `clap` | CLI argument parsing with derive macros |
+| `crossterm` | Cross-platform terminal control |
+| `anyhow` | Ergonomic error handling |
 | `serde_json` | History serialization |
-| `tracing` | Logging |
+| `tracing` | Structured logging |
 
 ## Performance
 
-- **CPU-only inference** — No GPU dependencies
-- **Quantized models** — Q4_K_M quantization provides good quality/speed tradeoff
-- **Streaming decode** — Tokens displayed as generated, not batched
-- **Context caching** — KV-cache for efficient multi-turn conversations
+- **CPU-only inference** — No GPU dependencies, portable binaries
+- **Quantized models** — Q4_K_M provides good quality/speed tradeoff; other quantizations supported
+- **Streaming decode** — Tokens displayed as generated for responsive UX
+- **Context caching** — Efficient multi-turn conversations with history management
 
 ## Roadmap
 
+- [ ] GPU acceleration (CUDA/Metal)
 - [ ] Multi-modal support
 - [ ] OpenAI-compatible API server
+- [ ] RAG integration
 - [ ] Model download/management
+- [ ] GGUF chat template extraction (vs. hardcoded detection)
 
 ## License
 
@@ -190,6 +288,6 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
-- [Candle](https://github.com/huggingface/candle) — HuggingFace's minimalist ML framework
-- [llama.cpp](https://github.com/ggerganov/llama.cpp) — Inspiration for GGUF inference
-- [shimmytok](https://crates.io/crates/shimmytok) — GGUF tokenizer support
+- [Candle](https://github.com/huggingface/candle) — HuggingFace's minimalist ML framework for Rust
+- [llama.cpp](https://github.com/ggerganov/llama.cpp) — Inspiration and GGUF format specification
+- [shimmytok](https://crates.io/crates/shimmytok) — Pure Rust GGUF tokenizer with llama.cpp compatibility
