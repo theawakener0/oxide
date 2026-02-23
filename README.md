@@ -35,7 +35,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/oxide-rs.git
+git clone https://github.com/theawakener0/oxide-rs.git
 cd oxide-rs
 
 # Build release binary
@@ -50,6 +50,18 @@ cargo build --release
 ```bash
 make install
 # Installs to ~/.local/bin/oxide-rs
+```
+
+### Install via Cargo
+
+```bash
+cargo install oxide-rs
+```
+
+This installs the CLI to `~/.cargo/bin/oxide-rs`. Then run:
+
+```bash
+oxide-rs -m model.gguf --once --prompt "Hello"
 ```
 
 ### Environment Variables
@@ -86,6 +98,59 @@ MODEL=~/Models/phi-3.Q4_K_M.gguf make run
   --top-p 0.9 \
   --repeat-penalty 1.15
 ```
+
+## Use as a Library
+
+Add oxide-rs to your Rust project:
+
+```bash
+cargo add oxide-rs
+```
+
+Or add manually to `Cargo.toml`:
+
+```toml
+[dependencies]
+oxide-rs = "0.1.0"
+```
+
+### Basic Usage
+
+```rust
+use oxide_rs::{generate, GenerateOptions};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let result = generate(
+        "model.gguf",
+        GenerateOptions::default(),
+        "Hello, how are you?",
+    )?;
+    println!("{}", result);
+    Ok(())
+}
+```
+
+### Builder API
+
+```rust
+use oxide_rs::Model;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut model = Model::new("model.gguf")
+        .with_options(oxide_rs::GenerateOptions {
+            max_tokens: 256,
+            temperature: 0.7,
+            ..Default::default()
+        })
+        .load()?;
+
+    let response = model.generate("What is Rust?")?;
+    println!("{}", response);
+    Ok(())
+}
+```
+
+For more examples, see the [docs/](docs/) directory.
 
 ## CLI Reference
 

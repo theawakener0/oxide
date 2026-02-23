@@ -23,8 +23,8 @@ oxide-rs = "0.1.0"
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/oxide.git
-cd oxide
+git clone https://github.com/theawakener0/oxide-rs.git
+cd oxide-rs
 
 # Build release binary
 make build
@@ -40,10 +40,20 @@ make install
 # Installs to ~/.local/bin/oxide-rs
 ```
 
+### Install via Cargo (CLI)
+
+```bash
+cargo install oxide-rs
+# Installs to ~/.cargo/bin/oxide-rs
+```
+
 ## CLI Quick Start
 
 ```bash
-# Interactive chat mode
+# If installed via cargo install
+oxide-rs --model ~/Models/your-model-Q4_K_M.gguf
+
+# Or run directly from source
 ./target/release/oxide-rs --model ~/Models/your-model-Q4_K_M.gguf
 
 # One-shot generation
