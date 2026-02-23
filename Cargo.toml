@@ -9,9 +9,9 @@ keywords = ["ai", "llm", "inference", "gguf", "candle"]
 categories = ["ai", "command-line-utilities"]
 
 [dependencies]
-candle-core = { git = "https://github.com/huggingface/candle.git", rev = "261f727f" }
-candle-nn = { git = "https://github.com/huggingface/candle.git", rev = "261f727f" }
-candle-transformers = { git = "https://github.com/huggingface/candle.git", rev = "261f727f" }
+candle-core = "0.9"
+candle-nn = "0.9"
+candle-transformers = "0.9"
 tokenizers = "0.19"
 shimmytok = "0.7"
 memmap2 = "0.9"
