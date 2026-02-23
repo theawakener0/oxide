@@ -5,8 +5,8 @@ edition = "2021"
 license = "MIT"
 description = "AI Inference library and CLI in Rust - llama.cpp style"
 repository = "https://github.com/yourusername/oxide"
-keywords = ["ai", "llm", "inference", "gguf", "candle"]
-categories = ["ai", "command-line-utilities"]
+keywords = ["llm", "inference", "gguf", "candle", "machine-learning"]
+categories = ["science", "command-line-utilities"]
 
 [dependencies]
 candle-core = "0.9"
