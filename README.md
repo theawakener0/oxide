@@ -18,6 +18,9 @@
 - **Beautiful CLI** — Animated loading, syntax-highlighted output, Rust-themed
 - **Smart Defaults** — Default system prompt reduces hallucinations, temperature tuned for accuracy
 - **Model Warmup** — Pre-compiles compute kernels on startup for faster first-token generation
+- **Memory-Mapped Loading** — OS-managed paging for instant load times and lower memory usage
+- **Auto Thread Tuning** — Automatically detects optimal thread count for your CPU
+- **Pre-allocated Buffers** — Zero-copy runtime allocations for smooth generation
 
 ## Installation
 
@@ -96,6 +99,7 @@ MODEL=~/Models/phi-3.Q4_K_M.gguf make run
 | `--repeat-penalty` | `1.1` | Penalty for repeated tokens |
 | `--repeat-last-n` | `64` | Context window for repeat penalty |
 | `--seed` | `299792458` | Random seed for reproducibility |
+| `--threads` | *auto* | Number of threads for inference (auto-detects optimal) |
 | `-p, --prompt` | *none* | Input prompt (for one-shot mode) |
 | `-o, --once` | `false` | Run in non-interactive mode |
 

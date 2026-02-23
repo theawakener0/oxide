@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::io::{Cursor, Seek};
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -6,6 +7,7 @@ use candle_core::quantized::gguf_file;
 use candle_core::{Device, Tensor};
 use candle_transformers::models::quantized_lfm2::ModelWeights as Lfm2Model;
 use candle_transformers::models::quantized_llama::ModelWeights as LlamaModel;
+use memmap2::Mmap;
 
 #[derive(Debug, Clone)]
 pub struct GgufMetadata {
@@ -39,10 +41,16 @@ impl Model {
 
         let device = Device::Cpu;
 
-        let mut file =
+        let file =
             File::open(path).with_context(|| format!("Failed to open model file: {:?}", path))?;
 
-        let content = gguf_file::Content::read(&mut file)
+        tracing::info!("Memory-mapping GGUF file ({} MB)...", file_size / 1_000_000);
+
+        let mmap = unsafe { Mmap::map(&file)? };
+
+        let mut cursor = Cursor::new(mmap);
+
+        let content = gguf_file::Content::read(&mut cursor)
             .with_context(|| format!("Failed to read GGUF file: {:?}", path))?;
 
         let metadata = Self::extract_metadata(&content, filename, file_size)?;
@@ -57,15 +65,19 @@ impl Model {
             arch
         );
 
+        cursor.seek(std::io::SeekFrom::Start(0))?;
+
         let inner = if arch == "lfm2" {
-            let weights = Lfm2Model::from_gguf(content, &mut file, &device)
+            let weights = Lfm2Model::from_gguf(content, &mut cursor, &device)
                 .with_context(|| "Failed to load LFM2 model weights from GGUF")?;
             ModelInner::Lfm2(weights)
         } else {
-            let weights = LlamaModel::from_gguf(content, &mut file, &device)
+            let weights = LlamaModel::from_gguf(content, &mut cursor, &device)
                 .with_context(|| "Failed to load LLaMA model weights from GGUF")?;
             ModelInner::Llama(weights)
         };
+
+        tracing::info!("Model loaded successfully");
 
         Ok(Self { inner, metadata })
     }

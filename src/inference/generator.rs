@@ -92,6 +92,8 @@ impl Generator {
 
         let logits_processor = LogitsProcessor::from_sampling(seed, sampling);
 
+        let token_history = Vec::with_capacity(metadata.context_length);
+
         Ok(Self {
             model,
             tokenizer,
@@ -100,7 +102,7 @@ impl Generator {
             metadata,
             messages: Vec::new(),
             system_prompt,
-            token_history: Vec::new(),
+            token_history,
         })
     }
 
@@ -160,13 +162,19 @@ impl Generator {
         if total_len > self.metadata.context_length {
             let excess = total_len - self.metadata.context_length;
             if excess < self.token_history.len() {
+                let old_len = self.token_history.len();
                 self.token_history.drain(0..excess);
+                tracing::debug!(
+                    "Context truncated: {} tokens -> {} tokens (kept most recent)",
+                    old_len,
+                    self.token_history.len()
+                );
             } else {
                 self.token_history.clear();
             }
         }
 
-        let mut all_tokens = Vec::new();
+        let mut all_tokens = Vec::with_capacity(self.metadata.context_length);
         all_tokens.extend_from_slice(&self.token_history);
         all_tokens.extend_from_slice(&prompt_tokens);
 

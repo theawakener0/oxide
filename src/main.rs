@@ -56,6 +56,10 @@ struct Args {
     #[arg(long, default_value = "299792458")]
     seed: u64,
 
+    /// Number of threads for inference (default: auto-detect)
+    #[arg(long)]
+    threads: Option<usize>,
+
     /// System prompt for the model
     #[arg(short, long)]
     system: Option<String>,
@@ -79,6 +83,18 @@ fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
+
+    if let Some(threads) = args.threads {
+        std::env::set_var("RAYON_NUM_THREADS", threads.to_string());
+    } else {
+        let num_cpus = num_cpus::get();
+        let optimal_threads = num_cpus.saturating_sub(1).max(1);
+        std::env::set_var("RAYON_NUM_THREADS", optimal_threads.to_string());
+    }
+
+    let configured_threads =
+        std::env::var("RAYON_NUM_THREADS").unwrap_or_else(|_| "auto".to_string());
+    tracing::info!("Using {} threads for inference", configured_threads);
 
     print_banner();
 
