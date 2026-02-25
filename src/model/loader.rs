@@ -166,10 +166,12 @@ impl Model {
             .or_else(|| {
                 filename
                     .split('.')
-                    .next_back()
+                    .rfind(|s| !s.eq_ignore_ascii_case("gguf") && !s.eq_ignore_ascii_case("bin"))
                     .map(|s| s.to_string())
                     .filter(|s| {
-                        s.len() > 2 && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                        s.len() >= 3
+                            && (s.starts_with("q") || s.starts_with("Q"))
+                            && s.chars().skip(1).all(|c| c.is_ascii_digit() || c == '_')
                     })
             });
 

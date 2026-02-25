@@ -59,31 +59,38 @@ fn extract_tokenizer_json(path: &PathBuf) -> Result<Option<String>> {
 impl TokenizerWrapper {
     pub fn from_gguf(path: &PathBuf) -> Result<Self> {
         let cache_path = get_cache_path(path)?;
+        let json_cache_path = cache_path.with_extension("tokenizer_json");
 
-        let inner = if cache_path.exists() {
-            tracing::info!("Loading tokenizer from cache: {:?}", cache_path);
+        let inner = if json_cache_path.exists() {
+            tracing::info!("Loading tokenizer from JSON cache: {:?}", json_cache_path);
+            match ShimmyTokenizer::from_gguf_file(&json_cache_path) {
+                Ok(tok) => tok,
+                Err(e) => {
+                    tracing::warn!("JSON cache corrupted ({}), loading from GGUF", e);
+                    ShimmyTokenizer::from_gguf_file(path)?
+                }
+            }
+        } else if cache_path.exists() {
+            tracing::info!("Loading tokenizer from legacy cache: {:?}", cache_path);
             ShimmyTokenizer::from_gguf_file(&cache_path)
                 .map_err(|e| {
-                    tracing::warn!("Cache corrupted, reloading from GGUF: {}", e);
+                    tracing::warn!("Legacy cache corrupted ({}), loading from GGUF", e);
                     e
                 })
                 .or_else(|_| ShimmyTokenizer::from_gguf_file(path))?
         } else {
             tracing::info!("Loading tokenizer from GGUF (first time)...");
 
+            let tokenizer = ShimmyTokenizer::from_gguf_file(path)
+                .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?;
+
             if let Ok(Some(tokenizer_json)) = extract_tokenizer_json(path) {
-                let json_cache_path = cache_path.with_extension("tokenizer_json");
                 if let Err(e) = fs::write(&json_cache_path, &tokenizer_json) {
                     tracing::warn!("Failed to cache tokenizer JSON: {}", e);
                 } else {
                     tracing::info!("Tokenizer JSON cached to {:?}", json_cache_path);
                 }
-            }
-
-            let tokenizer = ShimmyTokenizer::from_gguf_file(path)
-                .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?;
-
-            if let Err(e) = fs::copy(path, &cache_path) {
+            } else if let Err(e) = fs::copy(path, &cache_path) {
                 tracing::warn!("Failed to cache tokenizer: {}", e);
             } else {
                 tracing::info!("Tokenizer cached to {:?}", cache_path);
