@@ -1,0 +1,21 @@
+[package]
+name = "oxide-benches"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+oxide-rs = { path = "..", features = [] }
+criterion = { version = "0.5", features = ["html_reports"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[[bench]]
+name = "prefill"
+harness = false
+
+[[bench]]
+name = "decode"
+harness = false
+
+[[bench]]
+name = "batch"
+harness = false

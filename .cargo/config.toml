@@ -1,0 +1,9 @@
+[build]
+# Use native CPU features for maximum performance on the build machine
+# For cross-compilation, specify specific targets (e.g., haswell, skylake, aarch64-apple-darwin)
+rustflags = ["-C", "target-cpu=native"]
+
+[profile.release]
+# Additional optimization flags
+panic = "abort"
+strip = true

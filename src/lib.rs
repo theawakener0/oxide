@@ -83,7 +83,7 @@ pub mod model;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub use inference::{Generator, StreamEvent};
+pub use inference::{Generator, PagedAttentionConfig, PagedKvCache, StreamEvent};
 pub use model::{GgufMetadata, Model as ModelWrapper, TokenizerWrapper};
 
 /// Configuration options for text generation.
@@ -354,6 +354,45 @@ impl Model {
         )?;
 
         Ok(output)
+    }
+
+    /// Generate text from multiple prompts in batch.
+    ///
+    /// Processes multiple prompts sequentially, sharing the loaded model for efficiency.
+    /// Each prompt generates independently with its own output.
+    ///
+    /// Requires `load()` to be called first.
+    ///
+    /// # Arguments
+    ///
+    /// * `prompts` - Vector of input prompts
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let prompts = vec!["Hello!", "How are you?", "What's up?"];
+    /// let results = model.generate_batch(prompts)?;
+    /// for result in results {
+    ///     println!("{}", result);
+    /// }
+    /// ```
+    pub fn generate_batch(
+        &mut self,
+        prompts: Vec<&str>,
+    ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        let generator = self
+            .generator
+            .as_mut()
+            .ok_or("Model not loaded. Call load() first.")?;
+
+        let result = generator.generate_batch(
+            prompts,
+            self.options.max_tokens,
+            self.options.repeat_penalty,
+            self.options.repeat_last_n,
+        )?;
+
+        Ok(result)
     }
 
     /// Pre-compile compute kernels for faster first-token generation.

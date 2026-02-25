@@ -262,6 +262,154 @@ impl Generator {
 
         Ok(response)
     }
+
+    pub fn generate_batch(
+        &mut self,
+        prompts: Vec<&str>,
+        max_tokens: usize,
+        repeat_penalty: f32,
+        repeat_last_n: usize,
+    ) -> Result<Vec<String>> {
+        let mut results = Vec::with_capacity(prompts.len());
+
+        for prompt in prompts {
+            let result = self.generate_internal(
+                prompt,
+                max_tokens,
+                repeat_penalty,
+                repeat_last_n,
+                |_| {},
+                false,
+            )?;
+            results.push(result);
+        }
+
+        Ok(results)
+    }
+
+    fn generate_internal<F>(
+        &mut self,
+        prompt: &str,
+        max_tokens: usize,
+        repeat_penalty: f32,
+        repeat_last_n: usize,
+        mut callback: F,
+        store_history: bool,
+    ) -> Result<String>
+    where
+        F: FnMut(StreamEvent),
+    {
+        self.messages.push(Message {
+            role: "user".into(),
+            content: prompt.into(),
+        });
+
+        let mut all_messages = Vec::new();
+        if let Some(ref sys) = self.system_prompt {
+            all_messages.push(Message {
+                role: "system".into(),
+                content: sys.clone(),
+            });
+        }
+        all_messages.extend(self.messages.clone());
+
+        let prompt_text = self.template.apply(&all_messages)?;
+        let prompt_tokens = self.tokenizer.encode(&prompt_text)?;
+
+        let history_len = if store_history {
+            self.token_history.len()
+        } else {
+            0
+        };
+
+        let total_len = history_len + prompt_tokens.len() + max_tokens;
+        let mut token_history_for_gen = if store_history {
+            self.token_history.clone()
+        } else {
+            Vec::new()
+        };
+
+        if total_len > self.metadata.context_length {
+            let excess = total_len - self.metadata.context_length;
+            if excess < token_history_for_gen.len() {
+                token_history_for_gen.drain(0..excess);
+            } else {
+                token_history_for_gen.clear();
+            }
+        }
+
+        let mut all_tokens = Vec::with_capacity(self.metadata.context_length);
+        all_tokens.extend_from_slice(&token_history_for_gen);
+        all_tokens.extend_from_slice(&prompt_tokens);
+
+        let eos_token = self.tokenizer.eos_token_id();
+
+        let logits = self.model.forward(&prompt_tokens, 0)?;
+        let logits = logits.squeeze(0)?;
+
+        let mut next_token = self.logits_processor.sample(&logits)?;
+
+        all_tokens.push(next_token);
+
+        if let Some(text) = self.tokenizer.decode_next(next_token)? {
+            callback(StreamEvent::Token(text));
+        }
+
+        let mut _generated = 1usize;
+
+        for _ in 1..max_tokens {
+            if next_token == eos_token {
+                break;
+            }
+
+            let logits = self.model.forward(&[next_token], all_tokens.len() - 1)?;
+            let logits = logits.squeeze(0)?;
+
+            let logits = if repeat_penalty != 1.0 {
+                let start_at = all_tokens.len().saturating_sub(repeat_last_n);
+                apply_repeat_penalty(&logits, repeat_penalty, &all_tokens[start_at..])?
+            } else {
+                logits
+            };
+
+            next_token = self.logits_processor.sample(&logits)?;
+            all_tokens.push(next_token);
+            _generated += 1;
+
+            if let Some(text) = self.tokenizer.decode_next(next_token)? {
+                callback(StreamEvent::Token(text));
+            }
+
+            if next_token == eos_token {
+                break;
+            }
+        }
+
+        if let Some(rest) = self.tokenizer.decode_rest()? {
+            callback(StreamEvent::Token(rest));
+        }
+
+        self.tokenizer.clear_cache();
+
+        let response_tokens: Vec<u32> = all_tokens[history_len + prompt_tokens.len()..].to_vec();
+
+        if store_history {
+            self.token_history = all_tokens;
+        }
+
+        callback(StreamEvent::Done);
+
+        let response = self.tokenizer.decode(&response_tokens)?;
+
+        if store_history {
+            self.messages.push(Message {
+                role: "assistant".into(),
+                content: response.clone(),
+            });
+        }
+
+        Ok(response)
+    }
 }
 
 unsafe impl Send for Generator {}
