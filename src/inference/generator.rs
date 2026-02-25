@@ -4,6 +4,7 @@ use anyhow::Result;
 use candle_transformers::generation::{LogitsProcessor, Sampling};
 use candle_transformers::utils::apply_repeat_penalty;
 use minijinja::{context, Environment};
+use rayon::prelude::*;
 
 use crate::inference::paged_cache::PagedKvCache;
 use crate::model::{GgufMetadata, Model, TokenizerWrapper};
@@ -350,24 +351,29 @@ impl Generator {
         let template = self.template.clone();
         let system_prompt = self.system_prompt.clone();
 
+        let prompt_tokens_list: Vec<Vec<u32>> = prompts
+            .par_iter()
+            .map(|prompt| {
+                let mut all_messages = Vec::new();
+                if let Some(ref sys) = system_prompt {
+                    all_messages.push(Message {
+                        role: "system".into(),
+                        content: sys.clone(),
+                    });
+                }
+                all_messages.push(Message {
+                    role: "user".into(),
+                    content: prompt.to_string(),
+                });
+
+                let prompt_text = template.apply(&all_messages)?;
+                self.tokenizer.encode(&prompt_text)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
         let mut results = Vec::with_capacity(prompts.len());
 
-        for prompt in prompts {
-            let mut all_messages = Vec::new();
-            if let Some(ref sys) = system_prompt {
-                all_messages.push(Message {
-                    role: "system".into(),
-                    content: sys.clone(),
-                });
-            }
-            all_messages.push(Message {
-                role: "user".into(),
-                content: prompt.to_string(),
-            });
-
-            let prompt_text = template.apply(&all_messages)?;
-            let prompt_tokens = self.tokenizer.encode(&prompt_text)?;
-
+        for prompt_tokens in prompt_tokens_list {
             let result = self.generate_internal_with_tokens(
                 &prompt_tokens,
                 max_tokens,
