@@ -1,3 +1,5 @@
 # build release dir
 /target
-/benches/target
+
+# it is big
+/benches
