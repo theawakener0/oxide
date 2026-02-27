@@ -94,7 +94,7 @@ impl Model {
         Ok((mmap, model))
     }
 
-    pub fn prefetch_mmap(mmap: &Mmap) {
+    pub fn prefetch_mmap(mmap: &Mmap, prefetch_mb: usize) {
         let size = mmap.len();
         let ptr = mmap.as_ptr() as *mut std::ffi::c_void;
 
@@ -102,14 +102,14 @@ impl Model {
             // Set sequential access pattern
             libc::madvise(ptr, size, libc::MADV_SEQUENTIAL);
 
-            // Prefetch first 128MB (embeddings + early layers + vocab)
-            let prefetch_size = std::cmp::min(128 * 1024 * 1024, size);
+            // Prefetch specified size for better first-token performance
+            let prefetch_size = std::cmp::min(prefetch_mb * 1024 * 1024, size);
             libc::madvise(ptr, prefetch_size, libc::MADV_WILLNEED);
         }
 
         tracing::info!(
             "Prefetched {} MB of model data",
-            std::cmp::min(128, size / 1_000_000)
+            std::cmp::min(prefetch_mb, size / 1_000_000)
         );
     }
 

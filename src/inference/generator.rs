@@ -59,6 +59,8 @@ pub struct Generator {
     system_prompt: Option<String>,
     token_history: Vec<u32>,
     kv_cache: Option<PagedKvCache>,
+    batch_size: usize,
+    prefetch_size: usize,
 }
 
 impl Generator {
@@ -70,11 +72,13 @@ impl Generator {
         top_k: Option<usize>,
         seed: u64,
         system_prompt: Option<String>,
+        batch_size: usize,
+        prefetch_size: usize,
     ) -> Result<Self> {
         tracing::info!("Loading model from: {:?}", model_path);
 
         let (mmap, model) = Model::load_with_mmap(model_path)?;
-        Model::prefetch_mmap(&mmap);
+        Model::prefetch_mmap(&mmap, prefetch_size);
 
         let metadata = model.metadata().clone();
         let template = ChatTemplate::new(metadata.chat_template.clone())?;
@@ -117,6 +121,8 @@ impl Generator {
             system_prompt,
             token_history,
             kv_cache,
+            batch_size,
+            prefetch_size,
         })
     }
 
@@ -167,14 +173,19 @@ impl Generator {
 
         let warmup_tokens = vec![0u32; num_warmup_tokens.min(512)];
 
-        for i in (0..warmup_tokens.len()).step_by(64) {
-            let end = (i + 64).min(warmup_tokens.len());
+        let batch_size = self.batch_size;
+        for i in (0..warmup_tokens.len()).step_by(batch_size) {
+            let end = (i + batch_size).min(warmup_tokens.len());
             let batch = &warmup_tokens[i..end];
             let _ = self.model.forward(batch, i)?;
         }
 
         tracing::info!("Model warmup complete");
         Ok(())
+    }
+
+    pub fn batch_size(&self) -> usize {
+        self.batch_size
     }
 
     pub fn generate<F>(

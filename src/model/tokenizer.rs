@@ -13,6 +13,7 @@ pub struct TokenizerWrapper {
     inner: ShimmyTokenizer,
     eos_token_id: u32,
     pending_tokens: Vec<u32>,
+    cached_decoded: String,
 }
 
 fn get_cache_path(model_path: &PathBuf) -> Result<PathBuf> {
@@ -106,6 +107,7 @@ impl TokenizerWrapper {
             inner,
             eos_token_id,
             pending_tokens: Vec::new(),
+            cached_decoded: String::new(),
         })
     }
 
@@ -121,6 +123,7 @@ impl TokenizerWrapper {
             inner,
             eos_token_id,
             pending_tokens: Vec::new(),
+            cached_decoded: String::new(),
         })
     }
 
@@ -142,23 +145,23 @@ impl TokenizerWrapper {
 
     pub fn clear_cache(&mut self) {
         self.pending_tokens.clear();
+        self.cached_decoded.clear();
     }
 
     pub fn decode_next(&mut self, token: u32) -> Result<Option<String>> {
         self.pending_tokens.push(token);
 
-        let decoded = self.decode(&self.pending_tokens)?;
+        let new_token_decoded = self.decode(&[token])?;
 
-        let prev_decoded: String = {
-            let prev_tokens = &self.pending_tokens[..self.pending_tokens.len() - 1];
-            if prev_tokens.is_empty() {
-                String::new()
-            } else {
-                self.decode(prev_tokens)?
-            }
+        self.cached_decoded.push_str(&new_token_decoded);
+
+        let result = if new_token_decoded.is_empty() {
+            None
+        } else {
+            Some(new_token_decoded)
         };
 
-        Ok(get_new_text(&decoded, &prev_decoded))
+        Ok(result)
     }
 
     pub fn decode_rest(&mut self) -> Result<Option<String>> {
@@ -166,29 +169,12 @@ impl TokenizerWrapper {
             return Ok(None);
         }
 
-        let decoded = self.decode(&self.pending_tokens)?;
-
-        let prev_decoded: String = {
-            if self.pending_tokens.len() > 1 {
-                let prev_tokens = &self.pending_tokens[..self.pending_tokens.len() - 1];
-                self.decode(prev_tokens)?
-            } else {
-                String::new()
-            }
+        let result = if self.cached_decoded.is_empty() {
+            None
+        } else {
+            Some(std::mem::take(&mut self.cached_decoded))
         };
 
-        Ok(get_new_text(&decoded, &prev_decoded))
-    }
-}
-
-fn get_new_text(full: &str, prev: &str) -> Option<String> {
-    let prev_chars: Vec<char> = prev.chars().collect();
-    let full_chars: Vec<char> = full.chars().collect();
-
-    if full_chars.len() > prev_chars.len() {
-        let new_chars: String = full_chars[prev_chars.len()..].iter().collect();
-        Some(new_chars)
-    } else {
-        None
+        Ok(result)
     }
 }
