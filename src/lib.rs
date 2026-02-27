@@ -145,11 +145,6 @@ pub struct GenerateOptions {
     /// Default: `128`
     pub batch_size: usize,
 
-    /// Prefetch size in MB for model loading.
-    ///
-    /// Default: `512`
-    pub prefetch_size: usize,
-
     /// Random seed for reproducibility. Same seed + same input = same output.
     ///
     /// Default: `299792458`
@@ -171,7 +166,6 @@ impl Default for GenerateOptions {
             repeat_penalty: 1.1,
             repeat_last_n: 64,
             batch_size: 128,
-            prefetch_size: 512,
             seed: 299792458,
             system_prompt: None,
         }
@@ -283,7 +277,6 @@ impl Model {
             self.options.seed,
             self.options.system_prompt.clone(),
             self.options.batch_size,
-            self.options.prefetch_size,
         )?;
         self.generator = Some(generator);
         Ok(())

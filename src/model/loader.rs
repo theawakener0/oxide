@@ -94,7 +94,8 @@ impl Model {
         Ok((mmap, model))
     }
 
-    pub fn prefetch_mmap(mmap: &Mmap, prefetch_mb: usize) {
+    pub fn prefetch_mmap(mmap: &Mmap) {
+        let prefetch_mb = 512;
         let size = mmap.len();
         let ptr = mmap.as_ptr() as *mut std::ffi::c_void;
 
@@ -102,7 +103,7 @@ impl Model {
             // Set sequential access pattern
             libc::madvise(ptr, size, libc::MADV_SEQUENTIAL);
 
-            // Prefetch specified size for better first-token performance
+            // Prefetch 512MB for better first-token performance
             let prefetch_size = std::cmp::min(prefetch_mb * 1024 * 1024, size);
             libc::madvise(ptr, prefetch_size, libc::MADV_WILLNEED);
         }

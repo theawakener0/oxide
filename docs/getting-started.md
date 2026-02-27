@@ -16,7 +16,7 @@ Oxide-rs is both a CLI tool and a Rust library for AI inference. This guide cove
 cargo add oxide-rs
 
 # Or add to Cargo.toml manually
-oxide-rs = "0.1.0"
+oxide-rs = "0.1.12"
 ```
 
 ### Build from Source
@@ -63,6 +63,10 @@ oxide-rs --model ~/Models/your-model-Q4_K_M.gguf
 ./target/release/oxide-rs --model ~/Models/model.gguf \
   --temperature 0.8 \
   --max-tokens 256
+
+# With performance tuning
+./target/release/oxide-rs --model ~/Models/model.gguf \
+  --batch-size 256
 ```
 
 ## Interactive Mode Commands
@@ -83,6 +87,26 @@ When running in interactive mode, you can use these commands:
 - **Live Stats**: Displays tokens per second every 0.5s during generation
 - **Context Tracking**: Shows context usage in stats (e.g., `Context: 2048/4096`)
 - **Special Token Handling**: Automatically strips chat template tokens and converts newlines
+- **Performance Tuning**: Configurable batch size and prefetch size
+
+## CLI Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-m, --model` | required | Path to GGUF model file |
+| `-t, --tokenizer` | auto | Path to tokenizer.json |
+| `-s, --system` | auto | System prompt |
+| `--max-tokens` | 512 | Maximum tokens to generate |
+| `--temperature` | 0.3 | Sampling temperature |
+| `--top-k` | none | Top-k sampling |
+| `--top-p` | none | Top-p sampling |
+| `--repeat-penalty` | 1.1 | Repeat penalty |
+| `--repeat-last-n` | 64 | Context window for repeat penalty |
+| `--batch-size` | 128 | Batch size for warmup |
+| `--seed` | 299792458 | Random seed |
+| `--threads` | auto | Thread count |
+| `-p, --prompt` | none | Input prompt |
+| `-o, --once` | false | Non-interactive mode |
 
 ## Library Quick Start
 
@@ -90,7 +114,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-oxide-rs = "0.1.0"
+oxide-rs = "0.1.12"
 ```
 
 ### Basic Usage

@@ -27,6 +27,11 @@
 - **Tokenizer Caching** — Caches tokenizer to disk for faster subsequent loads
 - **Page Prefetching** — Preloads hot model pages into memory for faster first-token
 - **Quantization Display** — Shows actual quantization from GGUF metadata or filename
+- **Thinking Spinner** — Animated `🦀💭 Thinking...` during prefill phase
+- **Live tok/s Display** — Real-time tokens-per-second updates during generation
+- **Context Tracking** — Shows context usage in loading info and generation stats
+- **Special Token Handling** — Automatically strips chat template tokens for clean output
+- **Configurable Performance** — Batch size configurable via CLI
 
 ## Installation
 
@@ -169,16 +174,21 @@ For more examples, see the [docs/](docs/) directory.
 | `--top-p` | *none* | Nucleus sampling threshold |
 | `--repeat-penalty` | `1.1` | Penalty for repeated tokens |
 | `--repeat-last-n` | `64` | Context window for repeat penalty |
+| `--batch-size` | `128` | Batch size for warmup/prefill |
 | `--seed` | `299792458` | Random seed for reproducibility |
 | `--threads` | *auto* | Number of threads for inference (auto-detects optimal) |
 | `-p, --prompt` | *none* | Input prompt (for one-shot mode) |
 | `-o, --once` | `false` | Run in non-interactive mode |
+
+For detailed documentation, see [CLI Reference](docs/cli-reference.md).
 
 ## Interactive Commands
 
 | Command | Description |
 |---------|-------------|
 | `/clear` | Clear conversation history for current session |
+| `/context` | Show context usage (tokens used / limit / %) |
+| `/stats` | Show model info, settings, and context |
 | `/exit` or `/quit` | Exit the program |
 | `/help` | Show available commands |
 
@@ -386,6 +396,10 @@ make clean
 - **Model warmup** — Pre-compiles compute kernels on startup for faster first-token generation
 - **Smart defaults** — Temperature 0.3 for factual accuracy, default system prompt reduces hallucinations
 - **Safe threading** — Rayon ThreadPoolBuilder for predictable thread management
+- **Optimized tokenizer decode** — O(n) instead of O(n²) for faster token generation
+
+
+For more details, see [Performance Guide](docs/performance.md).
 
 ## Roadmap
 

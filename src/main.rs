@@ -52,10 +52,6 @@ struct Args {
     #[arg(long, default_value = "128")]
     batch_size: usize,
 
-    /// Prefetch size in MB for model loading (default: 512)
-    #[arg(long, default_value = "512")]
-    prefetch_size: usize,
-
     /// Random seed
     #[arg(long, default_value = "299792458")]
     seed: u64,
@@ -114,7 +110,6 @@ fn main() -> Result<()> {
             .clone()
             .or_else(|| Some(DEFAULT_SYSTEM_PROMPT.to_string())),
         args.batch_size,
-        args.prefetch_size,
     ) {
         Ok(mut g) => {
             if let Err(e) = g.warmup(128) {

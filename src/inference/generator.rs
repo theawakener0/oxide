@@ -60,7 +60,6 @@ pub struct Generator {
     token_history: Vec<u32>,
     kv_cache: Option<PagedKvCache>,
     batch_size: usize,
-    prefetch_size: usize,
 }
 
 impl Generator {
@@ -73,12 +72,11 @@ impl Generator {
         seed: u64,
         system_prompt: Option<String>,
         batch_size: usize,
-        prefetch_size: usize,
     ) -> Result<Self> {
         tracing::info!("Loading model from: {:?}", model_path);
 
         let (mmap, model) = Model::load_with_mmap(model_path)?;
-        Model::prefetch_mmap(&mmap, prefetch_size);
+        Model::prefetch_mmap(&mmap);
 
         let metadata = model.metadata().clone();
         let template = ChatTemplate::new(metadata.chat_template.clone())?;
@@ -122,7 +120,6 @@ impl Generator {
             token_history,
             kv_cache,
             batch_size,
-            prefetch_size,
         })
     }
 

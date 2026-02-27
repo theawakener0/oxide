@@ -63,6 +63,8 @@ pub struct GenerateOptions {
 | `top_k` | `Option<usize>` | `None` | Top-k sampling threshold |
 | `repeat_penalty` | `f32` | `1.1` | Penalty for repeated tokens (1.0 = no penalty) |
 | `repeat_last_n` | `usize` | `64` | Context window for repeat penalty |
+| `batch_size` | `usize` | `128` | Batch size for warmup/prefill |
+| `prefetch_size` | `usize` | `512` | Prefetch size in MB for model loading |
 | `seed` | `u64` | `299792458` | Random seed for reproducibility |
 | `system_prompt` | `Option<String>` | `None` | System prompt to prepend |
 
@@ -78,6 +80,8 @@ let options = GenerateOptions {
     top_k: Some(40),
     repeat_penalty: 1.15,
     repeat_last_n: 64,
+    batch_size: 128,
+    prefetch_size: 512,
     seed: 42,
     system_prompt: Some("You are a helpful assistant.".into()),
 };
