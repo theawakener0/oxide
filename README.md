@@ -115,7 +115,7 @@ Or add manually to `Cargo.toml`:
 
 ```toml
 [dependencies]
-oxide-rs = "0.1.10"
+oxide-rs = "0.1.11"
 ```
 
 ### Basic Usage
