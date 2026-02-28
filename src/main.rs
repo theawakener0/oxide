@@ -150,7 +150,7 @@ fn main() -> Result<()> {
         let context_used = gen_output.context_used();
         let mut prompt_token_count = 0usize;
 
-        gen_output.generate(
+        gen_output.generate_streaming(
             &prompt,
             args.max_tokens,
             args.repeat_penalty,
@@ -262,7 +262,7 @@ fn interactive_mode(generator: Generator, args: Args) -> Result<()> {
         let context_used = generator.context_used();
         let mut prompt_token_count = 0usize;
 
-        generator.generate(
+        generator.generate_streaming(
             &prompt,
             args.max_tokens,
             args.repeat_penalty,

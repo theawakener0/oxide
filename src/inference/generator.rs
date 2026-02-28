@@ -236,6 +236,7 @@ impl Generator {
             repeat_last_n,
             true,
             callback,
+            false,
         )?;
 
         self.messages.push(Message {
@@ -246,6 +247,63 @@ impl Generator {
         Ok(result)
     }
 
+    pub fn generate_streaming<F>(
+        &mut self,
+        prompt: &str,
+        max_tokens: usize,
+        repeat_penalty: f32,
+        repeat_last_n: usize,
+        callback: F,
+    ) -> Result<()>
+    where
+        F: FnMut(StreamEvent),
+    {
+        self.messages.push(Message {
+            role: "user".into(),
+            content: prompt.into(),
+        });
+
+        let mut all_messages = Vec::new();
+        if let Some(ref sys) = self.system_prompt {
+            all_messages.push(Message {
+                role: "system".into(),
+                content: sys.clone(),
+            });
+        }
+        all_messages.extend(self.messages.clone());
+
+        let prompt_text = self.template.apply(&all_messages)?;
+        let prompt_tokens = self.tokenizer.encode(&prompt_text)?;
+
+        let total_len = self.token_history.len() + prompt_tokens.len() + max_tokens;
+        if total_len > self.metadata.context_length {
+            let excess = total_len - self.metadata.context_length;
+            if excess < self.token_history.len() {
+                let old_len = self.token_history.len();
+                self.token_history.drain(0..excess);
+                tracing::debug!(
+                    "Context truncated: {} tokens -> {} tokens (kept most recent)",
+                    old_len,
+                    self.token_history.len()
+                );
+            } else {
+                self.token_history.clear();
+            }
+        }
+
+        let _result = self.generate_internal_with_tokens(
+            &prompt_tokens,
+            max_tokens,
+            repeat_penalty,
+            repeat_last_n,
+            true,
+            callback,
+            true,
+        )?;
+
+        Ok(())
+    }
+
     fn generate_internal_with_tokens<F>(
         &mut self,
         prompt_tokens: &[u32],
@@ -254,6 +312,7 @@ impl Generator {
         repeat_last_n: usize,
         store_history: bool,
         mut callback: F,
+        streaming: bool,
     ) -> Result<String>
     where
         F: FnMut(StreamEvent),
@@ -310,12 +369,11 @@ impl Generator {
 
         all_tokens.push(next_token);
 
-        if let Some(text) = self.tokenizer.decode_next(next_token)? {
-            callback(StreamEvent::Token(text));
-        }
+        let mut token_buffer: Vec<u32> = vec![next_token];
+        let decode_batch_size = 10;
+        let mut generated = 0usize;
 
         let gen_start = std::time::Instant::now();
-        let mut generated = 1usize;
 
         for _ in 1..max_tokens {
             if next_token == eos_token {
@@ -336,8 +394,15 @@ impl Generator {
             all_tokens.push(next_token);
             generated += 1;
 
-            if let Some(text) = self.tokenizer.decode_next(next_token)? {
-                callback(StreamEvent::Token(text));
+            token_buffer.push(next_token);
+
+            if token_buffer.len() >= decode_batch_size {
+                if let Ok(text) = self.tokenizer.decode(&token_buffer) {
+                    if !text.is_empty() {
+                        callback(StreamEvent::Token(text));
+                    }
+                }
+                token_buffer.clear();
             }
 
             if next_token == eos_token {
@@ -345,20 +410,29 @@ impl Generator {
             }
         }
 
+        if !token_buffer.is_empty() {
+            if let Ok(text) = self.tokenizer.decode(&token_buffer) {
+                if !text.is_empty() {
+                    callback(StreamEvent::Token(text));
+                }
+            }
+            token_buffer.clear();
+        }
+
         if let Some(rest) = self.tokenizer.decode_rest()? {
-            callback(StreamEvent::Token(rest));
+            if !rest.is_empty() {
+                callback(StreamEvent::Token(rest));
+            }
         }
 
         self.tokenizer.clear_cache();
 
-        let response_tokens: Vec<u32> = all_tokens[history_len + prompt_tokens.len()..].to_vec();
-
-        if store_history {
-            self.token_history = all_tokens;
-        }
-
         let dt = gen_start.elapsed();
-        let tokens_per_sec = generated as f64 / dt.as_secs_f64();
+        let tokens_per_sec = if generated > 0 && dt.as_secs_f64() > 0.0 {
+            generated as f64 / dt.as_secs_f64()
+        } else {
+            0.0
+        };
         tracing::info!(
             "Generated {} tokens in {:.2}s ({:.1} tokens/s)",
             generated,
@@ -368,7 +442,17 @@ impl Generator {
 
         callback(StreamEvent::Done);
 
-        let response = self.tokenizer.decode(&response_tokens)?;
+        let response = if streaming {
+            String::new()
+        } else {
+            let response_start = history_len + prompt_tokens.len();
+            let response_tokens: Vec<u32> = all_tokens[response_start..].to_vec();
+            self.tokenizer.decode(&response_tokens)?
+        };
+
+        if store_history {
+            self.token_history = all_tokens;
+        }
 
         Ok(response)
     }
@@ -413,6 +497,7 @@ impl Generator {
                 repeat_last_n,
                 false,
                 |_| {},
+                false,
             )?;
             results.push(result);
         }
