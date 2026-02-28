@@ -369,8 +369,13 @@ impl Generator {
 
         all_tokens.push(next_token);
 
-        let mut token_buffer: Vec<u32> = vec![next_token];
-        let decode_batch_size = 10;
+        // Handle first generated token
+        let mut token_buffer: Vec<u32> = Vec::new();
+        if !self.tokenizer.is_special_token(next_token) {
+            token_buffer.push(next_token);
+        }
+
+        let decode_batch_size = 1;
         let mut generated = 0usize;
 
         let gen_start = std::time::Instant::now();
@@ -394,15 +399,18 @@ impl Generator {
             all_tokens.push(next_token);
             generated += 1;
 
-            token_buffer.push(next_token);
+            // Skip special tokens - use tokenizer's built-in detection
+            if !self.tokenizer.is_special_token(next_token) {
+                token_buffer.push(next_token);
 
-            if token_buffer.len() >= decode_batch_size {
-                if let Ok(text) = self.tokenizer.decode(&token_buffer) {
-                    if !text.is_empty() {
-                        callback(StreamEvent::Token(text));
+                if token_buffer.len() >= decode_batch_size {
+                    if let Ok(text) = self.tokenizer.decode(&token_buffer) {
+                        if !text.is_empty() {
+                            callback(StreamEvent::Token(text));
+                        }
                     }
+                    token_buffer.clear();
                 }
-                token_buffer.clear();
             }
 
             if next_token == eos_token {

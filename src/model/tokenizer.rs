@@ -165,6 +165,10 @@ impl TokenizerWrapper {
         self.eos_token_id
     }
 
+    pub fn is_special_token(&self, token_id: u32) -> bool {
+        self.inner.is_special_token(token_id)
+    }
+
     pub fn clear_cache(&mut self) {
         self.pending_tokens.clear();
         self.cached_decoded.clear();
