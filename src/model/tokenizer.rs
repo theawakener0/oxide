@@ -14,6 +14,8 @@ pub struct TokenizerWrapper {
     eos_token_id: u32,
     pending_tokens: Vec<u32>,
     cached_decoded: String,
+    encode_buffer: Vec<u32>,
+    decode_buffer: String,
 }
 
 fn get_cache_path(model_path: &PathBuf) -> Result<PathBuf> {
@@ -108,6 +110,8 @@ impl TokenizerWrapper {
             eos_token_id,
             pending_tokens: Vec::new(),
             cached_decoded: String::new(),
+            encode_buffer: Vec::with_capacity(4096),
+            decode_buffer: String::with_capacity(4096),
         })
     }
 
@@ -124,6 +128,8 @@ impl TokenizerWrapper {
             eos_token_id,
             pending_tokens: Vec::new(),
             cached_decoded: String::new(),
+            encode_buffer: Vec::with_capacity(4096),
+            decode_buffer: String::with_capacity(4096),
         })
     }
 
@@ -133,10 +139,26 @@ impl TokenizerWrapper {
             .map_err(|e| anyhow::anyhow!("Encode failed: {}", e))
     }
 
+    pub fn encode_batch(&self, texts: &[&str]) -> Result<Vec<Vec<u32>>> {
+        let mut results = Vec::with_capacity(texts.len());
+        for text in texts {
+            results.push(self.encode(text)?);
+        }
+        Ok(results)
+    }
+
     pub fn decode(&self, tokens: &[u32]) -> Result<String> {
         self.inner
             .decode(tokens, false)
             .map_err(|e| anyhow::anyhow!("Decode failed: {}", e))
+    }
+
+    pub fn decode_batch(&self, tokens_batch: &[Vec<u32>]) -> Result<Vec<String>> {
+        let mut results = Vec::with_capacity(tokens_batch.len());
+        for tokens in tokens_batch {
+            results.push(self.decode(tokens)?);
+        }
+        Ok(results)
     }
 
     pub fn eos_token_id(&self) -> u32 {

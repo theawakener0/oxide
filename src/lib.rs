@@ -83,7 +83,11 @@ pub mod model;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub use inference::{Generator, PagedAttentionConfig, PagedKvCache, StreamEvent};
+pub use inference::{
+    BatchConfig, DynamicBatcher, Generator, PagedAttentionConfig, PagedKvCache, 
+    PrefixCache, PrefixCacheConfig, SimdLevel, StreamEvent,
+    ThreadPinnerConfig, ThreadPinner,
+};
 pub use model::{GgufMetadata, Model as ModelWrapper, TokenizerWrapper};
 
 /// Configuration options for text generation.
@@ -154,6 +158,41 @@ pub struct GenerateOptions {
     ///
     /// Default: `None`
     pub system_prompt: Option<String>,
+
+    /// Maximum batch size for dynamic batching.
+    ///
+    /// Default: `4`
+    pub max_batch_size: usize,
+
+    /// Time window (in ms) to wait for batching requests.
+    ///
+    /// Default: `1`
+    pub batch_window_ms: u64,
+
+    /// Enable prefix caching for faster TTFT.
+    ///
+    /// Default: `true`
+    pub enable_prefix_cache: bool,
+
+    /// Memory budget for prefix cache (in MB).
+    ///
+    /// Default: `512`
+    pub cache_memory_mb: usize,
+
+    /// Number of CPU threads (0 = auto-detect, use n-1).
+    ///
+    /// Default: `0` (auto)
+    pub cpu_threads: usize,
+
+    /// Number of cores to reserve for OS.
+    ///
+    /// Default: `0`
+    pub reserve_cores: usize,
+
+    /// SIMD level (auto, avx512, avx2, neon, scalar).
+    ///
+    /// Default: `auto`
+    pub simd_level: String,
 }
 
 impl Default for GenerateOptions {
@@ -168,6 +207,13 @@ impl Default for GenerateOptions {
             batch_size: 128,
             seed: 299792458,
             system_prompt: None,
+            max_batch_size: 4,
+            batch_window_ms: 1,
+            enable_prefix_cache: true,
+            cache_memory_mb: 512,
+            cpu_threads: 0,
+            reserve_cores: 0,
+            simd_level: "auto".to_string(),
         }
     }
 }
