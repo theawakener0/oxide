@@ -148,6 +148,7 @@ fn main() -> Result<()> {
         let mut thinking_spinner: Option<ThinkingSpinner> = None;
         let context_limit = gen_output.context_limit();
         let context_used = gen_output.context_used();
+        let mut prompt_token_count = 0usize;
 
         gen_output.generate(
             &prompt,
@@ -155,7 +156,9 @@ fn main() -> Result<()> {
             args.repeat_penalty,
             args.repeat_last_n,
             |event| match event {
-                StreamEvent::PrefillStatus(_) => {
+                StreamEvent::PrefillStatus(count) => {
+                    prompt_token_count = count;
+                    stream.set_prompt_tokens(count);
                     if thinking_spinner.is_none() {
                         thinking_spinner = Some(ThinkingSpinner::new());
                     }
@@ -252,6 +255,7 @@ fn interactive_mode(generator: Generator, args: Args) -> Result<()> {
         let mut thinking_spinner: Option<ThinkingSpinner> = None;
         let context_limit = generator.context_limit();
         let context_used = generator.context_used();
+        let mut prompt_token_count = 0usize;
 
         generator.generate(
             &prompt,
@@ -259,7 +263,9 @@ fn interactive_mode(generator: Generator, args: Args) -> Result<()> {
             args.repeat_penalty,
             args.repeat_last_n,
             |event| match event {
-                StreamEvent::PrefillStatus(_) => {
+                StreamEvent::PrefillStatus(count) => {
+                    prompt_token_count = count;
+                    stream.set_prompt_tokens(count);
                     if thinking_spinner.is_none() {
                         thinking_spinner = Some(ThinkingSpinner::new());
                     }

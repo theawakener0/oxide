@@ -165,6 +165,20 @@ impl Model {
             .get("general.quantization")
             .and_then(|v| v.to_string().ok().map(|s| s.to_string()))
             .or_else(|| {
+                // Try to find quantization in various model metadata keys
+                let quant_keys = ["quantization_version", "quantization"];
+                for key in quant_keys {
+                    if let Some(v) = md.get(&format!("{}.{}", arch, key)) {
+                        if let Ok(s) = v.to_string() {
+                            if !s.is_empty() {
+                                return Some(s.to_string());
+                            }
+                        }
+                    }
+                }
+                None
+            })
+            .or_else(|| {
                 filename
                     .split('.')
                     .rfind(|s| !s.eq_ignore_ascii_case("gguf") && !s.eq_ignore_ascii_case("bin"))

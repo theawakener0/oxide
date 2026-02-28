@@ -20,6 +20,16 @@ const THINKING_FRAMES: &[&str] = &[
     "🦀💭 Thinking",
 ];
 
+pub fn format_token_count(n: usize) -> String {
+    if n >= 1_000_000 {
+        format!("{:.1}M", n as f64 / 1_000_000.0)
+    } else if n >= 1_000 {
+        format!("{:.1}k", n as f64 / 1_000.0)
+    } else {
+        n.to_string()
+    }
+}
+
 pub struct ThinkingSpinner {
     running: Arc<AtomicBool>,
     handle: Option<JoinHandle<()>>,
@@ -123,6 +133,8 @@ pub struct StreamOutput {
     last_stats_time: Instant,
     context_used: usize,
     context_limit: usize,
+    prompt_tokens: usize,
+    finished: bool,
 }
 
 impl StreamOutput {
@@ -135,12 +147,18 @@ impl StreamOutput {
             last_stats_time: Instant::now(),
             context_used: 0,
             context_limit: 4096,
+            prompt_tokens: 0,
+            finished: false,
         }
     }
 
     pub fn set_context(&mut self, used: usize, limit: usize) {
         self.context_used = used;
         self.context_limit = limit;
+    }
+
+    pub fn set_prompt_tokens(&mut self, count: usize) {
+        self.prompt_tokens = count;
     }
 
     pub fn print_token(&mut self, token: &str) {
@@ -152,16 +170,10 @@ impl StreamOutput {
 
         let cleaned = strip_special_tokens(token);
 
-        if cleaned.contains('\n') {
-            for line in cleaned.lines() {
-                execute!(self.stdout, Print(line)).ok();
-                execute!(self.stdout, Print("\n")).ok();
-            }
-        } else {
+        if !cleaned.is_empty() {
             execute!(self.stdout, Print(&cleaned)).ok();
+            self.stdout.flush().ok();
         }
-
-        self.stdout.flush().ok();
 
         if self.last_stats_time.elapsed() >= Duration::from_millis(500) {
             self.print_live_stats();
@@ -177,6 +189,8 @@ impl StreamOutput {
             0.0
         };
 
+        let current_context = self.context_used + self.prompt_tokens + self.token_count;
+
         execute!(
             self.stdout,
             SetForegroundColor(Theme::IRON_GRAY),
@@ -185,7 +199,10 @@ impl StreamOutput {
             SetForegroundColor(Theme::TEXT_SECONDARY),
             Print(format!(
                 "{} tokens • {:.1} tok/s • Context: {}/{}",
-                self.token_count, tokens_per_sec, self.context_used, self.context_limit
+                self.token_count,
+                tokens_per_sec,
+                format_token_count(current_context),
+                format_token_count(self.context_limit)
             )),
             ResetColor,
             Print("\n")
@@ -194,12 +211,19 @@ impl StreamOutput {
     }
 
     pub fn finish(&mut self) {
+        if self.finished {
+            return;
+        }
+        self.finished = true;
+
         let elapsed = self.start_time.elapsed();
         let tokens_per_sec = if elapsed.as_secs_f64() > 0.0 {
             self.token_count as f64 / elapsed.as_secs_f64()
         } else {
             0.0
         };
+
+        let final_context = self.context_used + self.prompt_tokens + self.token_count;
 
         execute!(
             self.stdout,
@@ -213,8 +237,8 @@ impl StreamOutput {
                 "{} tokens • {:.1} tok/s • Context: {}/{} • {:.1}s",
                 self.token_count,
                 tokens_per_sec,
-                self.context_used,
-                self.context_limit,
+                format_token_count(final_context),
+                format_token_count(self.context_limit),
                 elapsed.as_secs_f64()
             )),
             ResetColor,
